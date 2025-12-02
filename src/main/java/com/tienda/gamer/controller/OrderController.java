@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -41,21 +42,15 @@ public class OrderController {
 
     @PostMapping("/checkout")
     @Operation(summary = "Crear orden a partir del carrito actual")
-    public ResponseEntity<Order> checkout(Principal principal) {
-
-        User user = getCurrentUser(principal);
-
+    public ResponseEntity<Order> checkout(@AuthenticationPrincipal User user) { // <-- USAR ESTO
+        // Eliminamos la necesidad de buscar el usuario
         Order order = orderService.createOrderFromCart(user);
-
         return ResponseEntity.ok(order);
     }
 
     @GetMapping("/me")
     @Operation(summary = "Listar órdenes del usuario autenticado")
-    public ResponseEntity<List<Order>> myOrders(Principal principal) {
-
-        User user = getCurrentUser(principal);
-
+    public ResponseEntity<List<Order>> myOrders(@AuthenticationPrincipal User user) { // <-- USAR ESTO
         return ResponseEntity.ok(
                 orderService.getOrdersForUser(user)
         );

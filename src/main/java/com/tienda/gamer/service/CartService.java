@@ -25,6 +25,7 @@ public class CartService {
 
     @Transactional
     public CartResponse addToCart(User user, AddToCartRequest request) {
+        // 1. Obtener o crear el carrito (Correcto para persistencia)
         Cart cart = cartRepository.findByUser(user)
                 .orElseGet(() -> {
                     Cart c = new Cart();
@@ -35,23 +36,30 @@ public class CartService {
         Product product = productRepository.findById(request.getProductId())
                 .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado"));
 
-        // buscar si ya existe el item
+        // 2. Buscar si ya existe el ítem
         CartItem existing = cart.getItems().stream()
                 .filter(i -> i.getProduct().getId().equals(product.getId()))
                 .findFirst()
                 .orElse(null);
 
         if (existing == null) {
+            // 3. Si no existe: Crear nuevo CartItem
             CartItem item = CartItem.builder()
-                    .cart(cart)
+                    // NO es necesario item.setCart(cart) aquí si usas el método helper
                     .product(product)
                     .quantity(request.getQuantity())
                     .build();
-            cart.getItems().add(item);
+
+            // 🔥 CORRECCIÓN CLAVE: Usar el método addCartItem de la entidad Cart.
+            // Esto sincroniza la lista del carrito Y la referencia cart del CartItem.
+            cart.addCartItem(item);
         } else {
+            // 3.b Si existe: Actualizar cantidad (Correcto)
             existing.setQuantity(existing.getQuantity() + request.getQuantity());
         }
 
+        // 4. Guardar el carrito. Gracias al CascadeType.ALL en Cart,
+        // los CartItem nuevos se guardarán automáticamente.
         Cart saved = cartRepository.save(cart);
         return mapToResponse(saved);
     }
@@ -66,6 +74,8 @@ public class CartService {
                 });
         return mapToResponse(cart);
     }
+
+    // Los demás métodos (removeFromCart, clearCart) no requerían cambios en su lógica.
 
     @Transactional
     public CartResponse removeFromCart(User user, Long productId) {

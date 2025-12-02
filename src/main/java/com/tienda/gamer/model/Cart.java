@@ -22,6 +22,21 @@ public class Cart {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
+    // SOLUCIÓN: Cambiar a FetchType.EAGER para cargar los ítems inmediatamente.
+    @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<CartItem> items = new ArrayList<>();
+
+    // Método utilitario para agregar items asegurando la relación
+    public void addCartItem(CartItem item) {
+        if (this.items == null) {
+            this.items = new ArrayList<>();
+        }
+        this.items.add(item);
+        item.setCart(this); // Sincroniza la referencia inversa
+    }
+
+    public void removeCartItem(CartItem item) {
+        this.items.remove(item);
+        item.setCart(null);
+    }
 }

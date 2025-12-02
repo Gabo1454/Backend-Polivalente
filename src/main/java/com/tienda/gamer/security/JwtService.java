@@ -1,5 +1,6 @@
 package com.tienda.gamer.security;
 
+import com.tienda.gamer.model.User; // Importa tu modelo User
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -24,7 +25,7 @@ public class JwtService {
     private long jwtExpirationMs;
 
     private SecretKey getSigningKey() {
-        // tu clave en application.properties está en Base64, así que la decodificamos
+        // Aseguramos que la clave Base64 se decodifique correctamente
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }
@@ -35,12 +36,25 @@ public class JwtService {
         return extractClaim(token, Claims::getSubject);
     }
 
+    // MÉTODO CORREGIDO: Extraer el ID del usuario como Long
+    public Long extractUserId(String token) {
+        // El claim 'userId' se almacena como un Integer o Long, por lo que lo leemos como Object
+        // y lo convertimos a Long para seguridad de tipos.
+        Object userIdClaim = extractClaim(token, claims -> claims.get("userId"));
+        if (userIdClaim instanceof Integer) {
+            return ((Integer) userIdClaim).longValue();
+        } else if (userIdClaim instanceof Long) {
+            return (Long) userIdClaim;
+        }
+        return null;
+    }
+
     public <T> T extractClaim(String token, Function<Claims, T> resolver) {
-        Claims claims = Jwts.parser()                  // JwtParserBuilder
-                .verifyWith(getSigningKey())           // configuramos la clave HMAC
-                .build()                               // construimos el parser
-                .parseSignedClaims(token)              // parse + verifica firma
-                .getPayload();                         // devolvemos el payload (Claims)
+        Claims claims = Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
 
         return resolver.apply(claims);
     }
@@ -50,6 +64,13 @@ public class JwtService {
     public String generateToken(UserDetails userDetails, String role) {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("role", role);
+
+        // AÑADIR EL ID DEL USUARIO A LOS CLAIMS (Aseguramos que es un Long si es posible)
+        if (userDetails instanceof User user) {
+            extraClaims.put("userId", user.getId());
+        }
+
+        // buildToken requiere String subject, que es el username
         return buildToken(extraClaims, userDetails.getUsername());
     }
 
@@ -59,10 +80,10 @@ public class JwtService {
 
         return Jwts.builder()
                 .claims(extraClaims)
-                .subject(subject)
+                .subject(subject) // Este es el String username
                 .issuedAt(now)
                 .expiration(expiry)
-                .signWith(getSigningKey())   // HS256 implícito
+                .signWith(getSigningKey())
                 .compact();
     }
 

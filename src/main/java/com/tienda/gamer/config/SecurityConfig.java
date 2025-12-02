@@ -39,13 +39,9 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Origen de tu frontend
-        config.setAllowedOriginPatterns(List.of("http://localhost:5173"));
-        // Métodos permitidos
+        config.setAllowedOrigins(List.of("http://localhost:5173"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // Permitimos todos los headers que pida el navegador
         config.setAllowedHeaders(List.of("*"));
-        // Exponemos Authorization por si lo necesitas leer
         config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
 
@@ -60,10 +56,18 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(sess ->
+                        sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+
                 .authorizeHttpRequests(auth -> auth
-                        // ==== PÚBLICOS (sin token) ====
+
+                        // OPTIONS siempre permitido
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // LOGIN / REGISTER / SWAGGER PÚBLICOS
+                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(
-                                "/api/auth/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**"
@@ -72,23 +76,21 @@ public class SecurityConfig {
                         // Productos GET públicos
                         .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
 
-                        // ==== RUTAS QUE REQUIEREN ESTAR LOGEADO ====
-                        .requestMatchers("/api/cart/**", "/api/orders/**")
-                        .authenticated()
+                        // Rutas que requieren login
+                        .requestMatchers("/api/cart/**").authenticated()
+                        .requestMatchers("/api/orders/**").authenticated()
 
-                        // Productos admin (crear/editar/borrar)
+                        // Solo admin
                         .requestMatchers(HttpMethod.POST, "/api/products/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/products/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
 
-                        // Cualquier otra ruta = autenticado
+                        // Todo lo demás requiere autenticación
                         .anyRequest().authenticated()
                 )
-                .sessionManagement(sess ->
-                        sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-                .userDetailsService(userDetailsService)
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .userDetailsService(userDetailsService);
 
         return http.build();
     }

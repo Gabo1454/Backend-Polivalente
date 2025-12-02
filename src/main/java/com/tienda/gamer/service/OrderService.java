@@ -1,11 +1,11 @@
 package com.tienda.gamer.service;
 
 import com.tienda.gamer.model.*;
+import com.tienda.gamer.repository.CartItemRepository;
 import com.tienda.gamer.repository.CartRepository;
+import com.tienda.gamer.repository.OrderItemRepository;
 import com.tienda.gamer.repository.OrderRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -14,53 +14,73 @@ public class OrderService {
 
     private final CartRepository cartRepository;
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final CartItemRepository cartItemRepository;
 
     public OrderService(CartRepository cartRepository,
-                        OrderRepository orderRepository) {
+                        OrderRepository orderRepository,
+                        OrderItemRepository orderItemRepository,
+                        CartItemRepository cartItemRepository) {
         this.cartRepository = cartRepository;
         this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.cartItemRepository = cartItemRepository;
     }
 
-    @Transactional
+    // ==========================
+    //  CREAR ORDEN DESDE CARRITO
+    // ==========================
     public Order createOrderFromCart(User user) {
+
         Cart cart = cartRepository.findByUser(user)
-                .orElseThrow(() -> new IllegalArgumentException("Carrito vacío"));
+                .orElseThrow(() -> new RuntimeException("El usuario no tiene carrito"));
 
         if (cart.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Carrito sin productos");
+            throw new RuntimeException("El carrito está vacío");
         }
 
-        Order order = new Order();
-        order.setUser(user);
-        order.setCreatedAt(LocalDateTime.now());
-        order.setStatus("CREATED");
+        // Crear orden
+        Order order = Order.builder()
+                .user(user)
+                .status("CREATED")
+                .totalAmount(calculateTotal(cart))
+                .createdAt(LocalDateTime.now())
+                .build();
 
-        int total = 0;
+        orderRepository.save(order);
 
+        // Copiar items del carrito → order_items
         for (CartItem cartItem : cart.getItems()) {
-            OrderItem oi = new OrderItem();
-            oi.setOrder(order);
-            oi.setProduct(cartItem.getProduct());
-            oi.setQuantity(cartItem.getQuantity());
-            oi.setPriceAtPurchase(cartItem.getProduct().getPrice());
 
-            total += cartItem.getQuantity() * cartItem.getProduct().getPrice();
-            order.getItems().add(oi);
+            OrderItem orderItem = OrderItem.builder()
+                    .order(order)
+                    .product(cartItem.getProduct())
+                    .quantity(cartItem.getQuantity())
+                    .priceAtPurchase(cartItem.getProduct().getPrice())
+                    .build();
+
+            orderItemRepository.save(orderItem);
         }
 
-        order.setTotalAmount(total);
-
-        Order saved = orderRepository.save(order);
-
-        // vaciar carrito
+        // Vaciar el carrito después de comprar
+        cartItemRepository.deleteAll(cart.getItems());
         cart.getItems().clear();
         cartRepository.save(cart);
 
-        return saved;
+        return order;
     }
 
-    @Transactional(readOnly = true)
+    private int calculateTotal(Cart cart) {
+
+        return cart.getItems().stream()
+                .mapToInt(item -> item.getProduct().getPrice() * item.getQuantity())
+                .sum();
+    }
+
+    // ==========================
+    //  OBTENER ÓRDENES DEL USUARIO
+    // ==========================
     public List<Order> getOrdersForUser(User user) {
-        return orderRepository.findByUserOrderByCreatedAtDesc(user);
+        return orderRepository.findByUser(user);
     }
 }

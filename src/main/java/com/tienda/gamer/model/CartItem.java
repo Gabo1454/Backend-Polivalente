@@ -18,6 +18,7 @@ public class CartItem {
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "cart_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Cart cart;
 
     @ManyToOne(optional = false)
